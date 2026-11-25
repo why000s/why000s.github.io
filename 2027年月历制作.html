@@ -1,0 +1,1287 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>肥肥肥的生活实验室 · 2027年历编辑器</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- 选用国内访问更稳定的字体镜像并保留优雅本地系统字体降级，确保大陆离线/本地双击瞬开 -->
+  <link rel="preconnect" href="https://fonts.loli.net" crossorigin />
+  <link href="https://fonts.loli.net/css2?family=Caveat:wght@500;600;700&family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&family=DM+Mono:wght@400;500&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;600&family=Noto+Serif+SC:wght@400;600&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,400&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
+  <!-- html2canvas 用于高清 PNG 导出（采用国内静态加速节点并备选官方节点） -->
+  <script src="https://cdn.staticfile.net/html2canvas/1.4.1/html2canvas.min.js" onerror="this.onerror=null;this.src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';"></script>
+
+  <style>
+    :root {
+      --ui-bg: #F3F2EE;
+      --ui-panel: #FAF9F6;
+      --ui-border: #E4E2DC;
+      --ui-text: #1C1B18;
+      --ui-muted: #78756E;
+      --ui-accent: #1C1B18;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background-color: var(--ui-bg);
+      color: var(--ui-text);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* 自定义极简滚动条 */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #D2CFC7;
+      border-radius: 999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #B5B1A8;
+    }
+
+    /* 滑块极简样式 */
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 4px;
+      background: #DFDDD6;
+      border-radius: 999px;
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #1C1B18;
+      cursor: pointer;
+      border: 2px solid #FAF9F6;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+      transition: transform 0.15s ease;
+    }
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.15);
+    }
+
+    /* 颜色选择器美化 */
+    input[type="color"] {
+      -webkit-appearance: none;
+      border: none;
+      padding: 0;
+      background: none;
+      cursor: pointer;
+    }
+    input[type="color"]::-webkit-color-swatch-wrapper {
+      padding: 0;
+    }
+    input[type="color"]::-webkit-color-swatch {
+      border: 1px solid rgba(0, 0, 0, 0.14);
+      border-radius: 6px;
+    }
+
+    /* 核心：日历卡片与CSS Grid绝对对齐系统 */
+    .calendar-card {
+      transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.25s ease, background-color 0.2s ease;
+      position: relative;
+      user-select: none;
+    }
+
+    .calendar-card.polaroid-style {
+      box-shadow: 0 12px 32px -12px rgba(24, 22, 18, 0.12), 0 2px 6px -1px rgba(24, 22, 18, 0.05);
+    }
+
+    .calendar-card.frameless-style {
+      box-shadow: none;
+    }
+
+    /* 严格 7 列等宽网格，保证任何字体、字号下数字列绝对垂直对齐 */
+    .cal-grid-7 {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      width: 100%;
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum" 1;
+    }
+
+    .cal-cell {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+
+    /* 图片拖拽容器 */
+    .photo-stage {
+      position: relative;
+      width: 100%;
+      overflow: hidden;
+      background-color: rgba(128, 128, 128, 0.08);
+    }
+
+    .photo-stage.has-image {
+      cursor: grab;
+    }
+
+    .photo-stage.has-image:active {
+      cursor: grabbing;
+    }
+
+    .photo-stage img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      pointer-events: none;
+      display: block;
+    }
+
+    /* 打印样式优化 */
+    @media print {
+      body {
+        background: #ffffff !important;
+      }
+      #sidebar, #topbar, #toast-container, .no-print {
+        display: none !important;
+      }
+      #workspace {
+        padding: 0 !important;
+        overflow: visible !important;
+        height: auto !important;
+      }
+      #canvas-container {
+        display: grid !important;
+        grid-template-columns: repeat(3, 1fr) !important;
+        gap: 16px !important;
+        max-width: 100% !important;
+      }
+      .calendar-card {
+        box-shadow: none !important;
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body class="h-screen flex flex-col lg:flex-row overflow-hidden">
+
+  <!-- 隐藏的文件上传控件 -->
+  <input type="file" id="batch-upload-input" accept="image/*" multiple class="hidden" />
+  <input type="file" id="single-upload-input" accept="image/*" class="hidden" />
+
+  <!-- 左侧/顶部控制面板 -->
+  <aside id="sidebar" class="w-full lg:w-[360px] xl:w-[380px] flex-shrink-0 bg-[#FAF9F6] border-b lg:border-b-0 lg:border-r border-[#E4E2DC] flex flex-col max-h-[46vh] lg:max-h-screen z-20">
+    <!-- 品牌标题栏 -->
+    <div class="px-5 py-4 border-b border-[#E4E2DC] flex items-center justify-between flex-shrink-0">
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="inline-block w-2 h-2 rounded-full bg-[#1C1B18]"></span>
+          <h1 class="text-sm font-semibold tracking-tight text-[#1C1B18]">肥肥肥的生活实验室 · 2027年历编辑器</h1>
+        </div>
+        <p class="text-[11px] text-[#78756E] mt-0.5">极简年度视觉月历排版工作室</p>
+      </div>
+      <span class="text-[11px] font-mono px-2 py-0.5 rounded bg-[#EFECE6] text-[#57544E]">2027</span>
+    </div>
+
+    <!-- 控制面板可滚动区域 -->
+    <div class="flex-1 overflow-y-auto px-5 py-4 space-y-6">
+
+      <!-- 1. 图片素材管理 -->
+      <section class="space-y-2.5">
+        <div class="flex items-center justify-between">
+          <h2 class="text-xs font-semibold uppercase tracking-wider text-[#57544E]">01 · 影像素材 (1–12月)</h2>
+          <span id="photo-count-badge" class="text-[11px] font-mono text-[#78756E]">0 / 12 已载入</span>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <button id="btn-batch-upload" class="col-span-2 py-2.5 px-3 rounded-lg bg-[#1C1B18] text-[#FAF9F6] text-xs font-medium hover:bg-[#33312C] active:scale-[0.99] transition flex items-center justify-center gap-2 shadow-sm">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+            批量导入图片 (最多12张)
+          </button>
+          <button id="btn-load-demo" class="py-2 px-2.5 rounded-lg bg-[#EFECE6] text-[#1C1B18] text-[11px] font-medium hover:bg-[#E4E0D8] transition">
+            填充艺术渐变示例
+          </button>
+          <button id="btn-clear-photos" class="py-2 px-2.5 rounded-lg border border-[#DCD9D0] text-[#78756E] text-[11px] font-medium hover:text-[#1C1B18] hover:border-[#B8B4A9] transition">
+            清空全部图片
+          </button>
+        </div>
+        <p class="text-[11px] text-[#8C8982] leading-relaxed">
+          提示：点击任意月份图片可上传/替换；已载入图片支持直接<strong class="font-medium text-[#57544E]">按住拖拽</strong>微调取景构图。
+        </p>
+      </section>
+
+      <hr class="border-[#EAE8E1]" />
+
+      <!-- 2. 画幅与卡片版式 -->
+      <section class="space-y-3">
+        <h2 class="text-xs font-semibold uppercase tracking-wider text-[#57544E]">02 · 版式与画幅比例</h2>
+
+        <!-- 卡片风格 -->
+        <div class="grid grid-cols-2 gap-2">
+          <button data-card-style="polaroid" class="card-style-btn py-2 px-3 rounded-lg border text-xs font-medium transition text-left flex flex-col gap-0.5 border-[#1C1B18] bg-[#1C1B18] text-white">
+            <span>经典拍立得风</span>
+            <span class="text-[10px] opacity-75">充足留白 · 悬浮卡片</span>
+          </button>
+          <button data-card-style="frameless" class="card-style-btn py-2 px-3 rounded-lg border text-xs font-medium transition text-left flex flex-col gap-0.5 border-[#DCD9D0] bg-white text-[#1C1B18] hover:border-[#9E9A90]">
+            <span>极简无框网格</span>
+            <span class="text-[10px] text-[#78756E]">利落边界 · 杂志画册</span>
+          </button>
+        </div>
+
+        <!-- 图片裁剪比例 -->
+        <div>
+          <label class="block text-[11px] text-[#57544E] mb-1.5">图片裁剪比例</label>
+          <div class="grid grid-cols-4 gap-1.5">
+            <button data-aspect="1 / 1" class="aspect-btn py-1.5 rounded-md text-xs font-mono border border-[#DCD9D0] bg-white text-[#1C1B18] hover:border-[#1C1B18] transition">1:1</button>
+            <button data-aspect="4 / 3" class="aspect-btn py-1.5 rounded-md text-xs font-mono border border-[#1C1B18] bg-[#1C1B18] text-white transition">4:3</button>
+            <button data-aspect="3 / 4" class="aspect-btn py-1.5 rounded-md text-xs font-mono border border-[#DCD9D0] bg-white text-[#1C1B18] hover:border-[#1C1B18] transition">3:4</button>
+            <button data-aspect="16 / 9" class="aspect-btn py-1.5 rounded-md text-xs font-mono border border-[#DCD9D0] bg-white text-[#1C1B18] hover:border-[#1C1B18] transition">16:9</button>
+          </div>
+        </div>
+
+        <!-- 留白内边距滑块 -->
+        <div>
+          <div class="flex justify-between text-[11px] mb-1">
+            <span class="text-[#57544E]">卡片四周留白</span>
+            <span id="val-padding" class="font-mono text-[#1C1B18]">20px</span>
+          </div>
+          <input type="range" id="ctrl-padding" min="0" max="40" step="2" value="20" />
+        </div>
+      </section>
+
+      <hr class="border-[#EAE8E1]" />
+
+      <!-- 3. 字体与网格排版 -->
+      <section class="space-y-3">
+        <div class="flex items-center justify-between">
+          <h2 class="text-xs font-semibold uppercase tracking-wider text-[#57544E]">03 · 字体与排版细节</h2>
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-[#EFECE6] text-[#57544E]">Grid 绝对对齐</span>
+        </div>
+
+        <!-- 精选字体下拉 -->
+        <div>
+          <label class="block text-[11px] text-[#57544E] mb-1">精选编辑字体</label>
+          <select id="ctrl-font-select" class="w-full py-2 px-2.5 rounded-lg border border-[#DCD9D0] bg-white text-xs text-[#1C1B18] focus:outline-none focus:border-[#1C1B18]">
+            <option value="'Inter', sans-serif">Inter · 瑞士现代无衬线</option>
+            <option value="'Space Grotesk', sans-serif">Space Grotesk · 几何先锋无衬线</option>
+            <option value="'Playfair Display', serif">Playfair Display · 经典杂志衬线</option>
+            <option value="'Cormorant Garamond', serif">Cormorant Garamond · 优雅高定衬线</option>
+            <option value="'JetBrains Mono', monospace">JetBrains Mono · 建筑感等宽字体</option>
+            <option value="'DM Mono', monospace">DM Mono · 温润打字机等宽</option>
+            <option value="'Caveat', cursive">Caveat · 自然随性手写体</option>
+            <option value="'Noto Serif SC', serif">思源宋体 · 东方静谧衬线</option>
+          </select>
+        </div>
+
+        <!-- 自定义字体输入 -->
+        <div>
+          <label class="block text-[11px] text-[#57544E] mb-1">或输入本地/自定义字体名称</label>
+          <input type="text" id="ctrl-custom-font" placeholder="例如: Helvetica Neue, Georgia, PingFang SC..." class="w-full py-1.5 px-2.5 rounded-lg border border-[#DCD9D0] bg-white text-xs text-[#1C1B18] placeholder-[#A8A49C] focus:outline-none focus:border-[#1C1B18]" />
+        </div>
+
+        <!-- 月份标题格式 -->
+        <div>
+          <label class="block text-[11px] text-[#57544E] mb-1">月份标题样式</label>
+          <select id="ctrl-title-format" class="w-full py-2 px-2.5 rounded-lg border border-[#DCD9D0] bg-white text-xs text-[#1C1B18] focus:outline-none focus:border-[#1C1B18]">
+            <option value="num-en">01 JANUARY</option>
+            <option value="en-year">January 2027</option>
+            <option value="cn-en">一月 · JAN</option>
+            <option value="num-cn">01 / 一月</option>
+            <option value="en-only">JANUARY</option>
+          </select>
+        </div>
+
+        <!-- 字号、行高、字间距滑块 -->
+        <div class="space-y-2.5 pt-1">
+          <div>
+            <div class="flex justify-between text-[11px] mb-1">
+              <span class="text-[#57544E]">日期基准字号</span>
+              <span id="val-fontsize" class="font-mono text-[#1C1B18]">11px</span>
+            </div>
+            <input type="range" id="ctrl-fontsize" min="9" max="16" step="0.5" value="11" />
+          </div>
+
+          <div>
+            <div class="flex justify-between text-[11px] mb-1">
+              <span class="text-[#57544E]">日历行高密度</span>
+              <span id="val-lineheight" class="font-mono text-[#1C1B18]">1.85</span>
+            </div>
+            <input type="range" id="ctrl-lineheight" min="1.3" max="2.6" step="0.05" value="1.85" />
+          </div>
+
+          <div>
+            <div class="flex justify-between text-[11px] mb-1">
+              <span class="text-[#57544E]">星期表头字间距</span>
+              <span id="val-letterspacing" class="font-mono text-[#1C1B18]">0.08em</span>
+            </div>
+            <input type="range" id="ctrl-letterspacing" min="0" max="0.25" step="0.01" value="0.08" />
+          </div>
+        </div>
+      </section>
+
+      <hr class="border-[#EAE8E1]" />
+
+      <!-- 4. 色彩美学方案 -->
+      <section class="space-y-3">
+        <h2 class="text-xs font-semibold uppercase tracking-wider text-[#57544E]">04 · 纸张与油墨色彩</h2>
+
+        <!-- 预设色板 -->
+        <div class="grid grid-cols-4 gap-1.5">
+          <button data-theme="warm-paper" class="theme-preset-btn p-1.5 rounded-lg border border-[#1C1B18] bg-white flex flex-col items-center gap-1 transition" title="温润美术纸">
+            <span class="w-full h-4 rounded bg-[#FDFBF7] border border-[#E6E2D8]"></span>
+            <span class="text-[10px] text-[#1C1B18]">美术纸</span>
+          </button>
+          <button data-theme="pure-gallery" class="theme-preset-btn p-1.5 rounded-lg border border-[#DCD9D0] bg-white flex flex-col items-center gap-1 transition" title="画廊纯白">
+            <span class="w-full h-4 rounded bg-[#FFFFFF] border border-[#E5E5E5]"></span>
+            <span class="text-[10px] text-[#1C1B18]">画廊白</span>
+          </button>
+          <button data-theme="sage-mist" class="theme-preset-btn p-1.5 rounded-lg border border-[#DCD9D0] bg-white flex flex-col items-center gap-1 transition" title="苔原青灰">
+            <span class="w-full h-4 rounded bg-[#EEF0EC] border border-[#D5D9D1]"></span>
+            <span class="text-[10px] text-[#1C1B18]">苔原灰</span>
+          </button>
+          <button data-theme="obsidian-dark" class="theme-preset-btn p-1.5 rounded-lg border border-[#DCD9D0] bg-white flex flex-col items-center gap-1 transition" title="暗房黑胶">
+            <span class="w-full h-4 rounded bg-[#181818] border border-[#333333]"></span>
+            <span class="text-[10px] text-[#1C1B18]">暗房黑</span>
+          </button>
+        </div>
+
+        <!-- 自定义颜色微调 -->
+        <div class="grid grid-cols-2 gap-2.5 pt-1">
+          <label class="flex items-center justify-between px-2.5 py-1.5 rounded-lg border border-[#DCD9D0] bg-white text-[11px]">
+            <span class="text-[#57544E]">卡片底色</span>
+            <input type="color" id="ctrl-bg-color" value="#FDFBF7" class="w-5 h-5" />
+          </label>
+          <label class="flex items-center justify-between px-2.5 py-1.5 rounded-lg border border-[#DCD9D0] bg-white text-[11px]">
+            <span class="text-[#57544E]">主文字色</span>
+            <input type="color" id="ctrl-text-color" value="#1E1D1A" class="w-5 h-5" />
+          </label>
+          <label class="flex items-center justify-between px-2.5 py-1.5 rounded-lg border border-[#DCD9D0] bg-white text-[11px]">
+            <span class="text-[#57544E]">周末强调</span>
+            <input type="color" id="ctrl-weekend-color" value="#B8503A" class="w-5 h-5" />
+          </label>
+          <label class="flex items-center justify-between px-2.5 py-1.5 rounded-lg border border-[#DCD9D0] bg-white text-[11px]">
+            <span class="text-[#57544E]">边框线条</span>
+            <input type="color" id="ctrl-border-color" value="#E6E2D8" class="w-5 h-5" />
+          </label>
+        </div>
+
+        <label class="flex items-center gap-2 text-[11px] text-[#57544E] cursor-pointer pt-0.5">
+          <input type="checkbox" id="ctrl-highlight-holidays" checked class="rounded border-[#DCD9D0] text-[#1C1B18] focus:ring-0" />
+          <span>同时使用强调色标记元旦/节日日期</span>
+        </label>
+      </section>
+    </div>
+
+    <!-- 底部导出操作栏 -->
+    <div class="p-4 border-t border-[#E4E2DC] bg-[#F5F3EE] space-y-2 flex-shrink-0">
+      <button id="btn-export-primary" class="w-full py-2.5 px-4 rounded-lg bg-[#1C1B18] text-white text-xs font-medium hover:bg-[#33312C] active:scale-[0.99] transition flex items-center justify-center gap-2 shadow-sm">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+        <span id="export-btn-label">导出全年 12 个月高清总览图 (PNG)</span>
+      </button>
+      <div class="grid grid-cols-2 gap-2">
+        <button id="btn-export-all-individual" class="py-2 px-2.5 rounded-lg border border-[#D4D0C7] bg-white text-[#1C1B18] text-[11px] font-medium hover:bg-[#EFECE6] transition">
+          逐月下载 12 张单图
+        </button>
+        <button id="btn-print" class="py-2 px-2.5 rounded-lg border border-[#D4D0C7] bg-white text-[#1C1B18] text-[11px] font-medium hover:bg-[#EFECE6] transition">
+          打印 / 存为 PDF
+        </button>
+      </div>
+      <div class="pt-1 text-center text-[10px] text-[#8C8982] tracking-wide">
+        © 肥肥肥的生活实验室 · 纯本地浏览器运行
+      </div>
+    </div>
+  </aside>
+
+  <!-- 右侧主工作区 -->
+  <main class="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
+    <!-- 顶部视图切换与单月导航栏 -->
+    <header id="topbar" class="h-14 px-4 sm:px-6 border-b border-[#E4E2DC] bg-[#FAF9F6]/80 backdrop-blur-md flex items-center justify-between gap-3 flex-shrink-0 z-10">
+      <!-- 视图模式切换 -->
+      <div class="flex items-center bg-[#ECEAE3] p-1 rounded-lg">
+        <button id="view-grid-btn" class="px-3 py-1 rounded-md text-xs font-medium bg-white text-[#1C1B18] shadow-sm transition">
+          12个月总览
+        </button>
+        <button id="view-single-btn" class="px-3 py-1 rounded-md text-xs font-medium text-[#6E6B64] hover:text-[#1C1B18] transition">
+          单月精调视图
+        </button>
+      </div>
+
+      <!-- 单月视图专用控制器 -->
+      <div id="single-view-controls" class="hidden items-center gap-2">
+        <button id="prev-month-btn" class="p-1.5 rounded-lg border border-[#DCD9D0] bg-white hover:bg-[#EFECE6] text-[#1C1B18] transition" title="上一个月">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+        </button>
+        <select id="single-month-select" class="py-1 px-2.5 rounded-lg border border-[#DCD9D0] bg-white text-xs font-medium text-[#1C1B18] focus:outline-none">
+          <!-- 动态填充 1-12 月 -->
+        </select>
+        <button id="next-month-btn" class="p-1.5 rounded-lg border border-[#DCD9D0] bg-white hover:bg-[#EFECE6] text-[#1C1B18] transition" title="下一个月">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+        </button>
+      </div>
+
+      <!-- 右侧状态提示 -->
+      <div class="hidden sm:flex items-center gap-3 text-[11px] text-[#78756E]">
+        <span>肥肥肥的生活实验室 · CSS Grid 精密对齐</span>
+      </div>
+    </header>
+
+    <!-- 预览画布滚动区 -->
+    <div id="workspace" class="flex-1 overflow-y-auto p-4 sm:p-8 lg:p-10">
+      <div id="export-wrapper" class="mx-auto transition-all duration-300">
+        <!-- 总览模式可显示的年份极简页眉 -->
+        <div id="overview-header" class="mb-6 sm:mb-8 flex flex-col sm:flex-row sm:items-end justify-between border-b border-[#DCD9D0] pb-3 px-1">
+          <div>
+            <span class="text-[11px] font-mono tracking-[0.18em] uppercase text-[#78756E]">肥肥肥的生活实验室 · ANNUAL VISUAL EDITION</span>
+            <h2 class="text-2xl sm:text-3xl font-light tracking-tight text-[#1C1B18] mt-0.5" style="font-family: 'Playfair Display', Georgia, 'Noto Serif SC', serif;">2027 Calendar Collection</h2>
+          </div>
+          <p class="text-xs font-mono text-[#78756E] mt-1 sm:mt-0">JAN — DEC · 365 DAYS</p>
+        </div>
+
+        <!-- 12个月卡片容器 -->
+        <div id="canvas-container" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6 sm:gap-7">
+          <!-- 由 JS 动态渲染 2027 年 12 个月卡片 -->
+        </div>
+
+        <!-- 总览底部极简品牌落款 -->
+        <div id="overview-footer" class="mt-6 pt-3 border-t border-[#E4E2DC] flex items-center justify-between text-[11px] text-[#8C8982] px-1">
+          <span>© 肥肥肥的生活实验室</span>
+          <span class="font-mono">2027 EDITION · MON — SUN</span>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- 非阻塞消息提示 Toast -->
+  <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <script>
+    /**
+     * 2027年标准日历核心数据与状态管理
+     * 2027年为平年，1月1日为星期五 (getDay() === 5)
+     */
+    const YEAR = 2027;
+    const WEEKDAYS_EN = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+    const MONTHS_META = [
+      { index: 0, num: '01', en: 'JANUARY', enCap: 'January', short: 'JAN', cn: '一月' },
+      { index: 1, num: '02', en: 'FEBRUARY', enCap: 'February', short: 'FEB', cn: '二月' },
+      { index: 2, num: '03', en: 'MARCH', enCap: 'March', short: 'MAR', cn: '三月' },
+      { index: 3, num: '04', en: 'APRIL', enCap: 'April', short: 'APR', cn: '四月' },
+      { index: 4, num: '05', en: 'MAY', enCap: 'May', short: 'MAY', cn: '五月' },
+      { index: 5, num: '06', en: 'JUNE', enCap: 'June', short: 'JUN', cn: '六月' },
+      { index: 6, num: '07', en: 'JULY', enCap: 'July', short: 'JUL', cn: '七月' },
+      { index: 7, num: '08', en: 'AUGUST', enCap: 'August', short: 'AUG', cn: '八月' },
+      { index: 8, num: '09', en: 'SEPTEMBER', enCap: 'September', short: 'SEP', cn: '九月' },
+      { index: 9, num: '10', en: 'OCTOBER', enCap: 'October', short: 'OCT', cn: '十月' },
+      { index: 10, num: '11', en: 'NOVEMBER', enCap: 'November', short: 'NOV', cn: '十一月' },
+      { index: 11, num: '12', en: 'DECEMBER', enCap: 'December', short: 'DEC', cn: '十二月' }
+    ];
+
+    // 2027年主要公历/传统节假日（用于可选高亮）
+    const HOLIDAYS_2027 = new Set([
+      '1-1',   // 元旦
+      '2-6', '2-7', '2-8', // 2027春节 (2月6日为大年初一)
+      '4-5',   // 清明节
+      '5-1',   // 劳动节
+      '6-9',   // 端午节 (2027年6月9日)
+      '9-15',  // 中秋节 (2027年9月15日)
+      '10-1', '10-2', '10-3', // 国庆节
+      '12-25'  // 圣诞节
+    ]);
+
+    // 12个月艺术静物渐变SVG占位图（用于示例填充，无外部网络依赖，导出PNG零跨域问题）
+    const DEMO_PALETTES = [
+      ['#D8CFC4', '#9E9386', 'WINTER SILENCE'],
+      ['#E6DCD3', '#B89F8D', 'EARLY LIGHT'],
+      ['#CED6CC', '#7F917C', 'SPRING MIST'],
+      ['#E8D5CE', '#C48B7E', 'BLOSSOM'],
+      ['#C8D6C5', '#6B8A67', 'VERDANT'],
+      ['#C5D5E0', '#6E8FA6', 'SOLSTICE'],
+      ['#E5D7BE', '#B8945A', 'HIGH SUMMER'],
+      ['#D6CFC2', '#8C8170', 'LATE AUGUST'],
+      ['#DEC8B4', '#A87954', 'EQUINOX'],
+      ['#D9BFB0', '#9E6248', 'AMBER LEAF'],
+      ['#C9C6C1', '#6E6B66', 'NOVEMBER FOG'],
+      ['#C2C9D1', '#586778', 'YEAR END']
+    ];
+
+    // 应用全局状态
+    const state = {
+      viewMode: 'grid', // 'grid' | 'single'
+      activeMonth: 0,   // 0 - 11
+      cardStyle: 'polaroid', // 'polaroid' | 'frameless'
+      aspectRatio: '4 / 3',
+      padding: 20,
+      fontFamily: "'Inter', sans-serif",
+      customFont: '',
+      titleFormat: 'num-en',
+      fontSize: 11,
+      lineHeight: 1.85,
+      letterSpacing: 0.08,
+      bgColor: '#FDFBF7',
+      textColor: '#1E1D1A',
+      weekendColor: '#B8503A',
+      borderColor: '#E6E2D8',
+      highlightHolidays: true,
+      // 12个月图片状态: { src: string|null, posX: number (0-100), posY: number (0-100) }
+      monthsData: Array.from({ length: 12 }, () => ({
+        src: null,
+        posX: 50,
+        posY: 50
+      }))
+    };
+
+    let targetUploadMonth = null;
+
+    // 提示消息工具
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const el = document.createElement('div');
+      const bgClass = type === 'error' ? 'bg-[#9E2A2B] text-white' : 'bg-[#1C1B18] text-[#FAF9F6]';
+      el.className = `${bgClass} px-4 py-2.5 rounded-lg shadow-lg text-xs font-medium flex items-center gap-2 transition-all duration-300 opacity-0 translate-y-2`;
+      el.textContent = message;
+      container.appendChild(el);
+      requestAnimationFrame(() => {
+        el.classList.remove('opacity-0', 'translate-y-2');
+      });
+      setTimeout(() => {
+        el.classList.add('opacity-0', 'translate-y-2');
+        setTimeout(() => el.remove(), 300);
+      }, 2800);
+    }
+
+    /**
+     * 计算 2027 年指定月份的日期网格数据（周一作为每周第一天）
+     */
+    function getMonthCalendarCells(year, monthIndex) {
+      const firstDay = new Date(year, monthIndex, 1);
+      const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+      // JS getDay(): 0=周日, 1=周一 ... 6=周六 -> 转换为 0=周一 ... 6=周日
+      const startOffset = (firstDay.getDay() + 6) % 7;
+
+      const cells = [];
+      for (let i = 0; i < startOffset; i++) {
+        cells.push({ day: null, isWeekend: false, isHoliday: false });
+      }
+      for (let d = 1; d <= daysInMonth; d++) {
+        const colIndex = (startOffset + d - 1) % 7;
+        const isWeekend = colIndex === 5 || colIndex === 6; // SAT 或 SUN
+        const isHoliday = HOLIDAYS_2027.has(`${monthIndex + 1}-${d}`);
+        cells.push({ day: d, isWeekend, isHoliday });
+      }
+      // 补齐末尾格子保持整齐
+      while (cells.length % 7 !== 0) {
+        cells.push({ day: null, isWeekend: false, isHoliday: false });
+      }
+      return cells;
+    }
+
+    /**
+     * 格式化月份标题
+     */
+    function formatMonthTitle(meta, format) {
+      switch (format) {
+        case 'num-en':
+          return `<span class="opacity-55 mr-1.5 font-normal">${meta.num}</span><span>${meta.en}</span>`;
+        case 'en-year':
+          return `<span>${meta.enCap}</span> <span class="opacity-50 font-normal">2027</span>`;
+        case 'cn-en':
+          return `<span>${meta.cn}</span> <span class="opacity-45 mx-1">·</span> <span class="tracking-widest">${meta.short}</span>`;
+        case 'num-cn':
+          return `<span class="opacity-55">${meta.num}</span> <span class="opacity-35 mx-1">/</span> <span>${meta.cn}</span>`;
+        case 'en-only':
+          return `<span>${meta.en}</span>`;
+        default:
+          return `${meta.num} ${meta.en}`;
+      }
+    }
+
+    /**
+     * 生成高质感极简艺术渐变 DataURL（离线可用，支持 html2canvas 完美导出）
+     */
+    function createDemoArtDataUrl(monthIndex) {
+      const [c1, c2, label] = DEMO_PALETTES[monthIndex];
+      const svg = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">
+          <defs>
+            <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="${c1}" />
+              <stop offset="100%" stop-color="${c2}" />
+            </linearGradient>
+            <radialGradient id="sun" cx="68%" cy="32%" r="45%">
+              <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.38" />
+              <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0" />
+            </radialGradient>
+          </defs>
+          <rect width="800" height="600" fill="url(#g)" />
+          <rect width="800" height="600" fill="url(#sun)" />
+          <circle cx="400" cy="300" r="145" fill="none" stroke="#FFFFFF" stroke-opacity="0.28" stroke-width="1.5" />
+          <text x="400" y="545" text-anchor="middle" fill="#FFFFFF" fill-opacity="0.65" font-family="Georgia, serif" font-size="16" letter-spacing="6">2027 · ${label}</text>
+        </svg>
+      `;
+      return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg.trim());
+    }
+
+    /**
+     * 更新已载入图片计数徽章
+     */
+    function updatePhotoCountBadge() {
+      const count = state.monthsData.filter(m => Boolean(m.src)).length;
+      document.getElementById('photo-count-badge').textContent = `${count} / 12 已载入`;
+    }
+
+    /**
+     * 渲染单张月份卡片 DOM
+     */
+    function buildMonthCard(monthIndex) {
+      const meta = MONTHS_META[monthIndex];
+      const data = state.monthsData[monthIndex];
+      const cells = getMonthCalendarCells(YEAR, monthIndex);
+      const effectiveFont = state.customFont.trim() ? `${state.customFont.trim()}, ${state.fontFamily}` : state.fontFamily;
+      const isPolaroid = state.cardStyle === 'polaroid';
+      const isSingleView = state.viewMode === 'single';
+
+      // 动态字号比例：单月精调视图下放大显示，总览视图下按设定的基准字号显示
+      const scaleFactor = isSingleView ? 1.38 : 1;
+      const baseFontSize = state.fontSize * scaleFactor;
+      const headerFontSize = (state.fontSize * 0.84) * scaleFactor;
+      const titleFontSize = (state.fontSize * 1.32) * scaleFactor;
+      const cardPadding = isSingleView ? Math.round(state.padding * 1.35) : state.padding;
+
+      const card = document.createElement('article');
+      card.id = `month-card-${monthIndex}`;
+      card.className = `calendar-card flex flex-col justify-between ${isPolaroid ? 'polaroid-style rounded-sm' : 'frameless-style'}`;
+      card.style.backgroundColor = state.bgColor;
+      card.style.color = state.textColor;
+      card.style.fontFamily = effectiveFont;
+      card.style.padding = `${cardPadding}px`;
+      card.style.border = `1px solid ${state.borderColor}`;
+
+      // 1. 顶部图片区域
+      const photoStage = document.createElement('div');
+      photoStage.className = `photo-stage group ${data.src ? 'has-image' : ''} ${isPolaroid ? 'rounded-[2px]' : ''}`;
+      photoStage.style.aspectRatio = state.aspectRatio;
+      photoStage.style.border = isPolaroid ? `1px solid ${state.borderColor}` : 'none';
+
+      if (data.src) {
+        const img = document.createElement('img');
+        img.src = data.src;
+        img.alt = `${meta.en} 2027`;
+        img.style.objectPosition = `${data.posX}% ${data.posY}%`;
+        photoStage.appendChild(img);
+
+        // 悬浮操作浮层（导出截图时自动忽略）
+        const overlay = document.createElement('div');
+        overlay.setAttribute('data-html2canvas-ignore', 'true');
+        overlay.className = 'no-print absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-between p-2.5';
+        overlay.innerHTML = `
+          <div class="flex justify-end gap-1.5">
+            <button type="button" data-action="replace" class="px-2.5 py-1 rounded bg-white/95 text-[#1C1B18] text-[11px] font-medium hover:bg-white shadow-sm">
+              替换
+            </button>
+            <button type="button" data-action="remove" class="px-2 py-1 rounded bg-[#1C1B18]/90 text-white text-[11px] font-medium hover:bg-[#9E2A2B] shadow-sm">
+              移除
+            </button>
+          </div>
+          <div class="text-center">
+            <span class="inline-block px-2 py-0.5 rounded bg-black/55 text-white/90 text-[10px] backdrop-blur-sm">
+              按住拖拽调整构图
+            </span>
+          </div>
+        `;
+        photoStage.appendChild(overlay);
+
+        // 绑定按钮事件
+        overlay.querySelector('[data-action="replace"]').addEventListener('click', (e) => {
+          e.stopPropagation();
+          triggerSingleUpload(monthIndex);
+        });
+        overlay.querySelector('[data-action="remove"]').addEventListener('click', (e) => {
+          e.stopPropagation();
+          state.monthsData[monthIndex] = { src: null, posX: 50, posY: 50 };
+          renderAll();
+          showToast(`已移除 ${meta.cn} 图片`);
+        });
+
+        // 绑定拖拽调整 object-position 事件（兼容鼠标与触摸）
+        attachImageDragHandlers(photoStage, img, monthIndex);
+      } else {
+        // 空状态上传占位符
+        const placeholder = document.createElement('div');
+        placeholder.className = 'w-full h-full flex flex-col items-center justify-center p-4 text-center cursor-pointer transition-colors hover:bg-black/[0.03]';
+        placeholder.style.border = `1px dashed ${state.borderColor}`;
+        placeholder.innerHTML = `
+          <svg class="w-5 h-5 mb-1.5 opacity-40" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
+          <span class="text-[11px] font-medium opacity-60">点击上传 ${meta.cn} 图片</span>
+          <span class="text-[10px] font-mono opacity-40 mt-0.5">${meta.en}</span>
+        `;
+        placeholder.addEventListener('click', () => triggerSingleUpload(monthIndex));
+        photoStage.appendChild(placeholder);
+      }
+
+      card.appendChild(photoStage);
+
+      // 2. 下方月历区域
+      const calSection = document.createElement('div');
+      calSection.style.marginTop = isSingleView ? '22px' : '16px';
+
+      // 月份标题栏
+      const titleRow = document.createElement('div');
+      titleRow.className = 'flex items-baseline justify-between pb-2 mb-2';
+      titleRow.style.borderBottom = `1px solid ${state.borderColor}`;
+      titleRow.innerHTML = `
+        <div style="font-size: ${titleFontSize}px; letter-spacing: 0.06em; font-weight: 600;">
+          ${formatMonthTitle(meta, state.titleFormat)}
+        </div>
+        <div style="font-size: ${headerFontSize * 0.9}px; opacity: 0.45; font-family: 'JetBrains Mono', monospace;">
+          2027
+        </div>
+      `;
+      calSection.appendChild(titleRow);
+
+      // 英文星期表头 (MON - SUN)
+      const weekdayRow = document.createElement('div');
+      weekdayRow.className = 'cal-grid-7 mb-1';
+      weekdayRow.style.fontSize = `${headerFontSize}px`;
+      weekdayRow.style.letterSpacing = `${state.letterSpacing}em`;
+      weekdayRow.style.fontWeight = '600';
+
+      WEEKDAYS_EN.forEach((dayName, idx) => {
+        const cell = document.createElement('div');
+        cell.className = 'cal-cell py-1';
+        const isWeekendCol = idx === 5 || idx === 6;
+        cell.style.color = isWeekendCol ? state.weekendColor : state.textColor;
+        cell.style.opacity = isWeekendCol ? '1' : '0.58';
+        cell.textContent = dayName;
+        weekdayRow.appendChild(cell);
+      });
+      calSection.appendChild(weekdayRow);
+
+      // 日期数字网格 (严格 7 列)
+      const daysGrid = document.createElement('div');
+      daysGrid.className = 'cal-grid-7';
+      daysGrid.style.fontSize = `${baseFontSize}px`;
+      daysGrid.style.lineHeight = `${state.lineHeight}`;
+
+      cells.forEach((item) => {
+        const cell = document.createElement('div');
+        cell.className = 'cal-cell';
+        if (item.day !== null) {
+          cell.textContent = item.day;
+          const shouldAccent = item.isWeekend || (state.highlightHolidays && item.isHoliday);
+          if (shouldAccent) {
+            cell.style.color = state.weekendColor;
+            cell.style.fontWeight = item.isHoliday && state.highlightHolidays ? '600' : '500';
+          } else {
+            cell.style.color = state.textColor;
+          }
+        }
+        daysGrid.appendChild(cell);
+      });
+      calSection.appendChild(daysGrid);
+
+      // 卡片底部极简快捷栏（仅在总览模式下悬停出现，方便点击进入单月精调或导出单图）
+      const quickBar = document.createElement('div');
+      quickBar.setAttribute('data-html2canvas-ignore', 'true');
+      quickBar.className = 'no-print mt-3 pt-2 border-t flex items-center justify-between text-[10px] opacity-60 hover:opacity-100 transition-opacity';
+      quickBar.style.borderColor = state.borderColor;
+      quickBar.innerHTML = `
+        <button type="button" data-action="focus-month" class="hover:underline flex items-center gap-1">
+          <span>放大精调</span>
+        </button>
+        <button type="button" data-action="export-single" class="hover:underline flex items-center gap-1">
+          <span>导出此月 PNG</span>
+        </button>
+      `;
+      quickBar.querySelector('[data-action="focus-month"]').addEventListener('click', () => {
+        state.activeMonth = monthIndex;
+        setViewMode('single');
+      });
+      quickBar.querySelector('[data-action="export-single"]').addEventListener('click', () => {
+        exportSingleMonthPng(monthIndex);
+      });
+
+      calSection.appendChild(quickBar);
+      card.appendChild(calSection);
+
+      return card;
+    }
+
+    /**
+     * 拖拽图片调整裁剪位置 (object-position)
+     */
+    function attachImageDragHandlers(stageEl, imgEl, monthIndex) {
+      let isDragging = false;
+      let startX = 0;
+      let startY = 0;
+      let initialPosX = 50;
+      let initialPosY = 50;
+
+      const onStart = (clientX, clientY) => {
+        isDragging = true;
+        startX = clientX;
+        startY = clientY;
+        initialPosX = state.monthsData[monthIndex].posX;
+        initialPosY = state.monthsData[monthIndex].posY;
+      };
+
+      const onMove = (clientX, clientY) => {
+        if (!isDragging) return;
+        const rect = stageEl.getBoundingClientRect();
+        const deltaX = ((clientX - startX) / rect.width) * -100;
+        const deltaY = ((clientY - startY) / rect.height) * -100;
+        const nextX = Math.max(0, Math.min(100, initialPosX + deltaX));
+        const nextY = Math.max(0, Math.min(100, initialPosY + deltaY));
+        state.monthsData[monthIndex].posX = nextX;
+        state.monthsData[monthIndex].posY = nextY;
+        imgEl.style.objectPosition = `${nextX}% ${nextY}%`;
+      };
+
+      const onEnd = () => {
+        isDragging = false;
+      };
+
+      stageEl.addEventListener('mousedown', (e) => {
+        if (e.target.closest('button')) return;
+        e.preventDefault();
+        onStart(e.clientX, e.clientY);
+      });
+      window.addEventListener('mousemove', (e) => onMove(e.clientX, e.clientY));
+      window.addEventListener('mouseup', onEnd);
+
+      stageEl.addEventListener('touchstart', (e) => {
+        if (e.target.closest('button')) return;
+        if (e.touches.length === 1) {
+          onStart(e.touches[0].clientX, e.touches[0].clientY);
+        }
+      }, { passive: true });
+      stageEl.addEventListener('touchmove', (e) => {
+        if (isDragging && e.touches.length === 1) {
+          e.preventDefault();
+          onMove(e.touches[0].clientX, e.touches[0].clientY);
+        }
+      }, { passive: false });
+      stageEl.addEventListener('touchend', onEnd);
+    }
+
+    /**
+     * 主渲染函数
+     */
+    function renderAll() {
+      updatePhotoCountBadge();
+      const container = document.getElementById('canvas-container');
+      const overviewHeader = document.getElementById('overview-header');
+      const overviewFooter = document.getElementById('overview-footer');
+      const exportWrapper = document.getElementById('export-wrapper');
+      container.innerHTML = '';
+
+      if (state.viewMode === 'grid') {
+        overviewHeader.classList.remove('hidden');
+        if (overviewFooter) overviewFooter.classList.remove('hidden');
+        exportWrapper.className = 'mx-auto max-w-[1440px] transition-all duration-300';
+        container.className = 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6 sm:gap-7';
+        for (let i = 0; i < 12; i++) {
+          container.appendChild(buildMonthCard(i));
+        }
+      } else {
+        overviewHeader.classList.add('hidden');
+        if (overviewFooter) overviewFooter.classList.add('hidden');
+        exportWrapper.className = 'mx-auto max-w-[520px] transition-all duration-300';
+        container.className = 'grid grid-cols-1';
+        container.appendChild(buildMonthCard(state.activeMonth));
+      }
+    }
+
+    /**
+     * 切换视图模式 ('grid' | 'single')
+     */
+    function setViewMode(mode) {
+      state.viewMode = mode;
+      const gridBtn = document.getElementById('view-grid-btn');
+      const singleBtn = document.getElementById('view-single-btn');
+      const singleControls = document.getElementById('single-view-controls');
+      const exportBtnLabel = document.getElementById('export-btn-label');
+
+      if (mode === 'grid') {
+        gridBtn.className = 'px-3 py-1 rounded-md text-xs font-medium bg-white text-[#1C1B18] shadow-sm transition';
+        singleBtn.className = 'px-3 py-1 rounded-md text-xs font-medium text-[#6E6B64] hover:text-[#1C1B18] transition';
+        singleControls.classList.add('hidden');
+        singleControls.classList.remove('flex');
+        exportBtnLabel.textContent = '导出全年 12 个月高清总览图 (PNG)';
+      } else {
+        singleBtn.className = 'px-3 py-1 rounded-md text-xs font-medium bg-white text-[#1C1B18] shadow-sm transition';
+        gridBtn.className = 'px-3 py-1 rounded-md text-xs font-medium text-[#6E6B64] hover:text-[#1C1B18] transition';
+        singleControls.classList.remove('hidden');
+        singleControls.classList.add('flex');
+        document.getElementById('single-month-select').value = String(state.activeMonth);
+        exportBtnLabel.textContent = `导出 ${MONTHS_META[state.activeMonth].cn} 高清卡片 (PNG)`;
+      }
+      renderAll();
+    }
+
+    /**
+     * 触发单月图片上传
+     */
+    function triggerSingleUpload(monthIndex) {
+      targetUploadMonth = monthIndex;
+      const input = document.getElementById('single-upload-input');
+      input.value = '';
+      input.click();
+    }
+
+    /**
+     * 读取图片文件为 DataURL
+     */
+    function readFileAsDataURL(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    /**
+     * 导出单个指定月份为高清 PNG
+     */
+    async function exportSingleMonthPng(monthIndex) {
+      const cardEl = document.getElementById(`month-card-${monthIndex}`);
+      if (!cardEl) return;
+      const meta = MONTHS_META[monthIndex];
+      showToast(`正在渲染 ${meta.cn} (${meta.en}) 高清图...`);
+      try {
+        const canvas = await html2canvas(cardEl, {
+          scale: 3,
+          useCORS: true,
+          backgroundColor: state.bgColor
+        });
+        const link = document.createElement('a');
+        link.download = `2027-${meta.num}-${meta.en}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+        showToast(`${meta.cn} 日历图片已导出`);
+      } catch (err) {
+        console.error(err);
+        showToast('导出失败，请重试', 'error');
+      }
+    }
+
+    /**
+     * 导出全年 12 个月整版高清总览图
+     */
+    async function exportFullYearPng() {
+      const wasSingle = state.viewMode === 'single';
+      if (wasSingle) {
+        setViewMode('grid');
+        await new Promise(r => setTimeout(r, 150));
+      }
+
+      const wrapper = document.getElementById('export-wrapper');
+      showToast('正在生成 2027 全年 12 个月高清整版图，请稍候...');
+
+      try {
+        const canvas = await html2canvas(wrapper, {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: '#F3F2EE',
+          windowWidth: 1440
+        });
+        const link = document.createElement('a');
+        link.download = '2027-Full-Year-Calendar.png';
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+        showToast('2027 全年总览图导出成功');
+      } catch (err) {
+        console.error(err);
+        showToast('导出整版图时发生错误', 'error');
+      } finally {
+        if (wasSingle) {
+          setViewMode('single');
+        }
+      }
+    }
+
+    /**
+     * 逐月批量导出 12 张独立 PNG
+     */
+    async function exportAllIndividualPngs() {
+      const wasSingle = state.viewMode === 'single';
+      if (wasSingle) {
+        setViewMode('grid');
+        await new Promise(r => setTimeout(r, 150));
+      }
+
+      showToast('开始依次导出 12 个月独立图片，请允许浏览器多文件下载...');
+      for (let i = 0; i < 12; i++) {
+        const cardEl = document.getElementById(`month-card-${i}`);
+        const meta = MONTHS_META[i];
+        if (!cardEl) continue;
+        const canvas = await html2canvas(cardEl, {
+          scale: 2.5,
+          useCORS: true,
+          backgroundColor: state.bgColor
+        });
+        const link = document.createElement('a');
+        link.download = `2027-${meta.num}-${meta.en}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+        await new Promise(r => setTimeout(r, 260));
+      }
+      showToast('12 个月独立图片已全部导出');
+
+      if (wasSingle) {
+        setViewMode('single');
+      }
+    }
+
+    /**
+     * 初始化所有交互控件绑定
+     */
+    function initControls() {
+      // 填充单月下拉选择器
+      const singleSelect = document.getElementById('single-month-select');
+      MONTHS_META.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = String(m.index);
+        opt.textContent = `${m.num} · ${m.cn} (${m.en})`;
+        singleSelect.appendChild(opt);
+      });
+
+      singleSelect.addEventListener('change', (e) => {
+        state.activeMonth = Number(e.target.value);
+        document.getElementById('export-btn-label').textContent = `导出 ${MONTHS_META[state.activeMonth].cn} 高清卡片 (PNG)`;
+        renderAll();
+      });
+
+      document.getElementById('prev-month-btn').addEventListener('click', () => {
+        state.activeMonth = (state.activeMonth + 11) % 12;
+        singleSelect.value = String(state.activeMonth);
+        document.getElementById('export-btn-label').textContent = `导出 ${MONTHS_META[state.activeMonth].cn} 高清卡片 (PNG)`;
+        renderAll();
+      });
+
+      document.getElementById('next-month-btn').addEventListener('click', () => {
+        state.activeMonth = (state.activeMonth + 1) % 12;
+        singleSelect.value = String(state.activeMonth);
+        document.getElementById('export-btn-label').textContent = `导出 ${MONTHS_META[state.activeMonth].cn} 高清卡片 (PNG)`;
+        renderAll();
+      });
+
+      // 视图模式切换
+      document.getElementById('view-grid-btn').addEventListener('click', () => setViewMode('grid'));
+      document.getElementById('view-single-btn').addEventListener('click', () => setViewMode('single'));
+
+      // 批量上传图片
+      const batchInput = document.getElementById('batch-upload-input');
+      document.getElementById('btn-batch-upload').addEventListener('click', () => {
+        batchInput.value = '';
+        batchInput.click();
+      });
+
+      batchInput.addEventListener('change', async (e) => {
+        const files = Array.from(e.target.files || []).slice(0, 12);
+        if (!files.length) return;
+        for (let i = 0; i < files.length; i++) {
+          const dataUrl = await readFileAsDataURL(files[i]);
+          state.monthsData[i] = { src: dataUrl, posX: 50, posY: 50 };
+        }
+        renderAll();
+        showToast(`已按顺序载入 ${files.length} 张图片至 1–${files.length} 月`);
+      });
+
+      // 单月替换/上传图片
+      const singleInput = document.getElementById('single-upload-input');
+      singleInput.addEventListener('change', async (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file || targetUploadMonth === null) return;
+        const dataUrl = await readFileAsDataURL(file);
+        state.monthsData[targetUploadMonth] = { src: dataUrl, posX: 50, posY: 50 };
+        renderAll();
+        showToast(`已更新 ${MONTHS_META[targetUploadMonth].cn} 图片`);
+      });
+
+      // 填充示例图片
+      document.getElementById('btn-load-demo').addEventListener('click', () => {
+        for (let i = 0; i < 12; i++) {
+          state.monthsData[i] = { src: createDemoArtDataUrl(i), posX: 50, posY: 50 };
+        }
+        renderAll();
+        showToast('已填充 12 个月艺术静物渐变示例');
+      });
+
+      // 清空图片
+      document.getElementById('btn-clear-photos').addEventListener('click', () => {
+        state.monthsData = Array.from({ length: 12 }, () => ({ src: null, posX: 50, posY: 50 }));
+        renderAll();
+        showToast('已清空全部图片');
+      });
+
+      // 卡片风格切换
+      document.querySelectorAll('.card-style-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          state.cardStyle = btn.dataset.cardStyle;
+          document.querySelectorAll('.card-style-btn').forEach(b => {
+            const active = b.dataset.cardStyle === state.cardStyle;
+            b.className = active
+              ? 'card-style-btn py-2 px-3 rounded-lg border text-xs font-medium transition text-left flex flex-col gap-0.5 border-[#1C1B18] bg-[#1C1B18] text-white'
+              : 'card-style-btn py-2 px-3 rounded-lg border text-xs font-medium transition text-left flex flex-col gap-0.5 border-[#DCD9D0] bg-white text-[#1C1B18] hover:border-[#9E9A90]';
+          });
+          if (state.cardStyle === 'frameless' && state.padding > 12) {
+            state.padding = 0;
+            document.getElementById('ctrl-padding').value = '0';
+            document.getElementById('val-padding').textContent = '0px';
+          } else if (state.cardStyle === 'polaroid' && state.padding === 0) {
+            state.padding = 20;
+            document.getElementById('ctrl-padding').value = '20';
+            document.getElementById('val-padding').textContent = '20px';
+          }
+          renderAll();
+        });
+      });
+
+      // 裁剪比例切换
+      document.querySelectorAll('.aspect-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          state.aspectRatio = btn.dataset.aspect;
+          document.querySelectorAll('.aspect-btn').forEach(b => {
+            const active = b.dataset.aspect === state.aspectRatio;
+            b.className = active
+              ? 'aspect-btn py-1.5 rounded-md text-xs font-mono border border-[#1C1B18] bg-[#1C1B18] text-white transition'
+              : 'aspect-btn py-1.5 rounded-md text-xs font-mono border border-[#DCD9D0] bg-white text-[#1C1B18] hover:border-[#1C1B18] transition';
+          });
+          renderAll();
+        });
+      });
+
+      // 留白内边距滑块
+      const ctrlPadding = document.getElementById('ctrl-padding');
+      ctrlPadding.addEventListener('input', (e) => {
+        state.padding = Number(e.target.value);
+        document.getElementById('val-padding').textContent = `${state.padding}px`;
+        renderAll();
+      });
+
+      // 字体选择与自定义字体
+      document.getElementById('ctrl-font-select').addEventListener('change', (e) => {
+        state.fontFamily = e.target.value;
+        renderAll();
+      });
+
+      document.getElementById('ctrl-custom-font').addEventListener('input', (e) => {
+        state.customFont = e.target.value;
+        renderAll();
+      });
+
+      // 月份标题格式
+      document.getElementById('ctrl-title-format').addEventListener('change', (e) => {
+        state.titleFormat = e.target.value;
+        renderAll();
+      });
+
+      // 字号、行高、字间距
+      document.getElementById('ctrl-fontsize').addEventListener('input', (e) => {
+        state.fontSize = Number(e.target.value);
+        document.getElementById('val-fontsize').textContent = `${state.fontSize}px`;
+        renderAll();
+      });
+
+      document.getElementById('ctrl-lineheight').addEventListener('input', (e) => {
+        state.lineHeight = Number(e.target.value);
+        document.getElementById('val-lineheight').textContent = state.lineHeight.toFixed(2);
+        renderAll();
+      });
+
+      document.getElementById('ctrl-letterspacing').addEventListener('input', (e) => {
+        state.letterSpacing = Number(e.target.value);
+        document.getElementById('val-letterspacing').textContent = `${state.letterSpacing.toFixed(2)}em`;
+        renderAll();
+      });
+
+      // 预设配色方案
+      const THEMES = {
+        'warm-paper': { bg: '#FDFBF7', text: '#1E1D1A', weekend: '#B8503A', border: '#E6E2D8' },
+        'pure-gallery': { bg: '#FFFFFF', text: '#111111', weekend: '#D64545', border: '#EBEBEB' },
+        'sage-mist': { bg: '#EEF0EC', text: '#242B25', weekend: '#8A5A44', border: '#D5D9D1' },
+        'obsidian-dark': { bg: '#181818', text: '#F2F0EB', weekend: '#E07A5F', border: '#2E2E2E' }
+      };
+
+      document.querySelectorAll('.theme-preset-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const t = THEMES[btn.dataset.theme];
+          if (!t) return;
+          state.bgColor = t.bg;
+          state.textColor = t.text;
+          state.weekendColor = t.weekend;
+          state.borderColor = t.border;
+
+          document.getElementById('ctrl-bg-color').value = t.bg;
+          document.getElementById('ctrl-text-color').value = t.text;
+          document.getElementById('ctrl-weekend-color').value = t.weekend;
+          document.getElementById('ctrl-border-color').value = t.border;
+
+          document.querySelectorAll('.theme-preset-btn').forEach(b => {
+            b.classList.toggle('border-[#1C1B18]', b === btn);
+            b.classList.toggle('border-[#DCD9D0]', b !== btn);
+          });
+          renderAll();
+        });
+      });
+
+      // 自定义颜色选择器
+      document.getElementById('ctrl-bg-color').addEventListener('input', (e) => {
+        state.bgColor = e.target.value;
+        renderAll();
+      });
+      document.getElementById('ctrl-text-color').addEventListener('input', (e) => {
+        state.textColor = e.target.value;
+        renderAll();
+      });
+      document.getElementById('ctrl-weekend-color').addEventListener('input', (e) => {
+        state.weekendColor = e.target.value;
+        renderAll();
+      });
+      document.getElementById('ctrl-border-color').addEventListener('input', (e) => {
+        state.borderColor = e.target.value;
+        renderAll();
+      });
+
+      // 节日高亮开关
+      document.getElementById('ctrl-highlight-holidays').addEventListener('change', (e) => {
+        state.highlightHolidays = e.target.checked;
+        renderAll();
+      });
+
+      // 导出按钮绑定
+      document.getElementById('btn-export-primary').addEventListener('click', () => {
+        if (state.viewMode === 'single') {
+          exportSingleMonthPng(state.activeMonth);
+        } else {
+          exportFullYearPng();
+        }
+      });
+
+      document.getElementById('btn-export-all-individual').addEventListener('click', exportAllIndividualPngs);
+      document.getElementById('btn-print').addEventListener('click', () => window.print());
+    }
+
+    // 启动初始化
+    window.addEventListener('DOMContentLoaded', () => {
+      initControls();
+      renderAll();
+    });
+  </script>
+</body>
+</html>
